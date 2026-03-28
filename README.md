@@ -94,7 +94,7 @@ cd worker1
 docker compose up -d
 ```
 
-The `ray-start-head.sh` script will wait for worker nodes to connect before starting vLLM.
+The `ray-start-head.sh` script will wait for all worker nodes to connect before starting vLLM.
 
 ### 5. Verify Deployment
 
@@ -109,12 +109,12 @@ You should see a message like `✓ Ray cluster ready with 2 nodes` followed by v
 
 For running on a single DGX Spark without clustering:
 
-1. Comment out the ray-start-head bind mount in `head/compose.yaml`:
-   ```yaml
-   # - ${RAY_SCRIPT_DIR}/ray-start-head.sh:/opt/nvidia/entrypoint.d/99-ray-start-head.sh
+1. Edit `RAY_CLUSTER_SIZE` in `head/.env` to 0 or 1:
+   ```bash
+   RAY_CLUSTER_SIZE=2
    ```
 
-2. Adjust the command to match your model and tensor parallelism:
+2. Remove the `--tensor-parallel-size` and `--distributed-executor-backend` options from vllm:
    ```yaml
    --tensor-parallel-size 2  # or appropriate for single node GPU count
    --distributed-executor-backend ray  # may need to be removed for single-node
@@ -130,10 +130,9 @@ DGX Spark natively supports 2 nodes via direct QSFP56 connection. For larger clu
 2. **Configuration**: 
    - Copy `worker1/` directory for each additional worker (e.g., `worker2/`, `worker3/`)
    - Update `.env` files with unique IPs for each node
-   - Modify `head/ray-start-head.sh` to update the expected node count:
+   - Modify `head/.env` to update the expected node count:
      ```bash
-     nodes=$(($(ray status 2>&1 | awk '/Active:/,/Pending:/' | grep -c "^ *[0-9]* node_")))
-     [ "$nodes" -ge N ] && break  # Replace N with total node count
+     RAY_CLUSTER_SIZE=N # Replace N with total node count
      ```
 
 ## Model Configuration
