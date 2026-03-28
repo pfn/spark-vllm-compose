@@ -1,0 +1,65 @@
+services:
+  # RDMA requires root, cannot specify a user
+  vllm:
+    image: vllm-node-tf5
+    container_name: vllm
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    mem_limit: 110g
+    memswap_limit: 120g
+    pids_limit: 4096
+    network_mode: host
+    shm_size: 64g
+    devices:
+      - /dev/infiniband:/dev/infiniband
+    volumes:
+      # configure, or omit this, per your needs
+      # use a directory like this if you have models already downloaded to a specific location
+      - ${MODELS_BASEDIR}:/models
+
+      # use this bind mount if you use hf to download and cache models for you
+      #- $HOME/.cache/huggingface:/root/.cache/huggingface
+
+      # unused on workers
+      #- ${RAY_SCRIPT_DIR}/ray-start-head.sh:/opt/nvidia/entrypoint.d/99-ray-start-head.sh
+      # persist generated caches, can also use to persist hf downloaded models, add an entry as necessary
+      - cache-data:/root/.cache/vllm
+      - cache-data:/root/.triton
+      - cache-data:/root/.cache/flashinfer
+    cap_add:
+      - IPC_LOCK
+      - SYS_RESOURCE
+    environment:
+      - RAY_NODE_IP_ADDRESS=${NODE_IP_ADDRESS}
+      - RAY_OVERRIDE_NODE_IP_ADDRESS=${NODE_IP_ADDRESS}
+      - RAY_memory_monitor_refresh_ms=0
+      - RAY_num_prestart_python_workers=0
+      - RAY_object_store_memory=1073741824
+      - VLLM_HOST_IP=${NODE_IP_ADDRESS}
+      - VLLM_MARLIN_USE_ATOMIC_ADD=1
+      - MN_IF_NAME=enp1s0f1np1 
+      - UCX_NET_DEVICES=enp1s0f1np1
+      - NCCL_IB_DISABLE=0
+      - NCCL_SOCKET_IFNAME=enp1s0f1np1 
+      - NCCL_IB_HCA=rocep1s0f1,roceP2p1s0f1
+      - GLOO_SOCKET_IFNAME=enp1s0f1np1
+      - OMPI_MCA_btl_tcp_if_include=enp1s0f1np1
+      - TP_SOCKET_IFNAME=enp1s0f1np1
+      - NCCL_IGNORE_CPU_AFFINITY=1 
+      #- NCCL_DEBUG=INFO
+    restart: unless-stopped
+    command: >
+      ray start --block
+        --object-store-memory 1073741824
+        --num-cpus 2
+        --disable-usage-stats
+        --address=${HEAD_IP_ADDRESS}:6379
+        --node-ip-address ${NODE_IP_ADDRESS}
+
+volumes:
+  cache-data:
