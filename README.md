@@ -9,7 +9,7 @@ This repository simplifies deploying distributed vLLM across DGX Spark nodes by 
 - **DGX Spark nodes** running the latest DGX OS (updates recommended)
 - **vllm-node-tf5 image** built on each node using `build_and_copy.sh` from [spark-vllm-docker](https://github.com/eugr/spark-vllm-docker):
   ```bash
-  ./build_and_copy.sh -t vllm-node-tf5 --pre-tf
+  ./build_and_copy.sh -t vllm-node-tf5 --tf5
   ```
 - **Docker access**: Add your user to the `docker` group to avoid `sudo`:
   ```bash
