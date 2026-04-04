@@ -1,6 +1,6 @@
-services:
+x-services-templates:
   # RDMA requires root, cannot specify a user
-  vllm:
+  vllm-template: &vllm-template
     image: vllm-node-tf5
     container_name: vllm
     deploy:
@@ -18,6 +18,9 @@ services:
     devices:
       - /dev/infiniband:/dev/infiniband
     volumes:
+      - /sys/class/infiniband:/sys/class/infiniband:ro
+      # used for clearing buffers to maximize available memory
+      - /proc/sys/vm/drop_caches:/host/proc/sys/vm/drop_caches
       # configure, or omit this, per your needs
       # use a directory like this if you have models already downloaded to a specific location
       - ${MODELS_BASEDIR}:/models
@@ -41,6 +44,7 @@ services:
       - RAY_num_prestart_python_workers=0
       - RAY_object_store_memory=1073741824
       - VLLM_HOST_IP=${NODE_IP_ADDRESS}
+      # int4-AutoAround kernel
       - VLLM_MARLIN_USE_ATOMIC_ADD=1
       - MN_IF_NAME=enp1s0f1np1 
       - UCX_NET_DEVICES=enp1s0f1np1
@@ -51,29 +55,85 @@ services:
       - OMPI_MCA_btl_tcp_if_include=enp1s0f1np1
       - TP_SOCKET_IFNAME=enp1s0f1np1
       - NCCL_IGNORE_CPU_AFFINITY=1 
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
       #- NCCL_DEBUG=INFO
     restart: unless-stopped
-    # configure your vllm command here
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+services:
+  vllm-397b:
+    <<: *vllm-template
     command: >
       vllm serve
-        /models/Qwen3.5-122B-A10B-int4-AutoRound
-        --served-model-name qwen3.5-122b-a10b
-        --quantization compressed-tensors
-        --max-model-len 262144
+        /models/Qwen3.5-397B-A17B-int4-AutoRound
+        --served-model-name "Qwen3.5 397B:FP8"
+        --max-model-len 32768
+        --max-num-seqs 4
         --enable-prefix-caching
-        --gpu-memory-utilization 0.8
+        --gpu-memory-utilization 0.9209
+        --port 8000
+        --host 0.0.0.0
+        --load-format safetensors
+        --kv-cache-dtype fp8_e4m3
+        --dtype auto
+        --enable-chunked-prefil
+        --enable-auto-tool-choice
+        --tool-call-parser qwen3_coder
+        --reasoning-parser qwen3
+        --max-num-batched-tokens 16384
+        --trust-remote-code
+        --mm-encoder-tp-mode data
+        --distributed-executor-backend ray
+        --tensor-parallel-size 2
+
+  vllm-122b:
+    <<: *vllm-template
+    profiles: ["ignore"]
+    command: >
+      vllm serve
+        /models/Qwen3.5-122B-A10B-FP8
+        --served-model-name "Qwen3.5 122B:FP8"
+        --max-model-len 262144
+        --max-num-seqs 4
+        --enable-prefix-caching
+        --gpu-memory-utilization 0.6
         --port 8000
         --host 0.0.0.0
         --load-format fastsafetensors
         --kv-cache-dtype fp8_e4m3
-        --enable-chunked-prefill
+        --enable-chunked-prefil
         --enable-auto-tool-choice
         --tool-call-parser qwen3_coder
         --reasoning-parser qwen3
         --max-num-batched-tokens 8192
         --trust-remote-code
         --mm-encoder-tp-mode data
-        --speculative-config='{"method":"qwen3_next_mtp","num_speculative_tokens":2}'
+        --distributed-executor-backend ray
+        --tensor-parallel-size 2
+        -O3
+
+  vllm-gemma:
+    <<: *vllm-template
+    profiles: ["ignore"]
+    command: >
+      vllm serve
+        /models/gemma-4-31B-it-NVFP4
+        --served-model-name gemma-4-31B-it
+        --max-model-len 262144
+        --enable-prefix-caching
+        --gpu-memory-utilization 0.6
+        --port 8000
+        --host 0.0.0.0
+        --load-format fastsafetensors
+        --kv-cache-dtype fp8_e4m3
+        --enable-chunked-prefil
+        --max-num-batched-tokens 8192
+        --trust-remote-code
+        --mm-encoder-tp-mode data
         --distributed-executor-backend ray
         --tensor-parallel-size 2
         -O3

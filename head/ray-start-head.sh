@@ -22,3 +22,6 @@ if [ $RAY_CLUSTER_SIZE -gt 1 ]; then
 else
   echo "✓ Skipping ray cluster init for single node startup"
 fi
+
+sync
+echo 3 > /host/proc/sys/vm/drop_caches
