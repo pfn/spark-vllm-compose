@@ -70,7 +70,7 @@ services:
     command: >
       vllm serve
         /models/Qwen3.5-397B-A17B-int4-AutoRound
-        --served-model-name "Qwen3.5 397B:FP8"
+        --served-model-name "Qwen3.5 397B:int4"
         --max-model-len 32768
         --max-num-seqs 4
         --enable-prefix-caching
