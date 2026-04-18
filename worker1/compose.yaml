@@ -28,11 +28,17 @@ services:
       # use this bind mount if you use hf to download and cache models for you
       #- $HOME/.cache/huggingface:/root/.cache/huggingface
 
-      - ${RAY_SCRIPT_DIR}/ray-start-head.sh:/opt/nvidia/entrypoint.d/99-ray-start-head.sh
       # persist generated caches, can also use to persist hf downloaded models, add an entry as necessary
       - cache-data:/root/.cache/vllm
       - cache-data:/root/.triton
       - cache-data:/root/.cache/flashinfer
+
+      - ../head/drop-caches.sh:/opt/nvidia/entrypoint.d/99-drop-caches.sh
+
+      - ./launch-worker.sh:/launch-worker.sh:ro
+      # mount cluster launch command sent from head
+      # create an empty file at ~/.vllm-cluster-command prior to running for the first time
+      - $HOME/.vllm-cluster-command:/root/.vllm-cluster-command:ro
     cap_add:
       - IPC_LOCK
       - SYS_RESOURCE
@@ -61,13 +67,7 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
-    command: >
-      ray start --block
-        --object-store-memory 1073741824
-        --num-cpus 2
-        --disable-usage-stats
-        --address=${HEAD_IP_ADDRESS}:6379
-        --node-ip-address ${NODE_IP_ADDRESS}
+    command: /launch-worker.sh
 
 volumes:
   cache-data:
